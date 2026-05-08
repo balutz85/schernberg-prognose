@@ -1,0 +1,655 @@
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Solar-Prognose</title>
+<link rel="icon" href="favicon.png" type="image/png">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,600&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    min-height: 100vh;
+    background: linear-gradient(145deg, #0c1222 0%, #162032 40%, #1a2a40 70%, #0f1a2e 100%);
+    font-family: 'Newsreader', Georgia, serif;
+    color: #e2e8f0;
+    padding: 24px 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .sans { font-family: 'DM Sans', sans-serif; }
+  .container { max-width: 720px; margin: 0 auto; }
+
+  /* Animations */
+  .fade-in {
+    opacity: 0; transform: translateY(12px);
+    transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .fade-in.visible { opacity: 1; transform: translateY(0); }
+
+  /* Loading */
+  .loading {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 60vh; gap: 20px;
+  }
+  .spinner {
+    width: 40px; height: 40px; border: 3px solid rgba(251,191,36,0.15);
+    border-top-color: #fbbf24; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 14px; color: #64748b; }
+  .error-box {
+    background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.2);
+    border-radius: 16px; padding: 24px; text-align: center; margin-top: 40px;
+  }
+  .error-box h2 { color: #f87171; font-size: 18px; margin-bottom: 8px; }
+  .error-box p { color: #94a3b8; font-size: 13px; line-height: 1.6; }
+  .retry-btn {
+    margin-top: 16px; padding: 8px 20px; border-radius: 20px;
+    border: 1px solid rgba(251,191,36,0.3); background: rgba(251,191,36,0.1);
+    color: #fbbf24; font-size: 13px; cursor: pointer; font-family: 'DM Sans', sans-serif;
+  }
+
+  /* Header */
+  .label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 3px;
+    color: #fbbf24; margin-bottom: 8px; font-weight: 600;
+  }
+  .live-dot {
+    display: inline-block; width: 7px; height: 7px; background: #34d399;
+    border-radius: 50%; margin-right: 6px; animation: blink 2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  h1 { font-size: 32px; font-weight: 300; line-height: 1.2; letter-spacing: -0.5px; }
+  .sub { font-size: 13px; color: #64748b; margin-top: 6px; }
+
+  /* System Size */
+  .size-row { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .size-label { font-size: 12px; color: #94a3b8; }
+  .size-btn {
+    padding: 4px 12px; border-radius: 20px;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: transparent; color: #64748b;
+    font-size: 12px; font-weight: 500; cursor: pointer;
+    transition: all 0.2s; font-family: 'DM Sans', sans-serif;
+  }
+  .size-btn.active {
+    border-color: rgba(251,191,36,0.4);
+    background: rgba(251,191,36,0.1);
+    color: #fbbf24;
+  }
+  .size-btn:hover { border-color: rgba(251,191,36,0.25); }
+
+  /* Highlight Card */
+  .highlight {
+    background: linear-gradient(135deg, rgba(251,191,36,0.05) 0%, rgba(251,191,36,0.02) 100%);
+    border: 1px solid rgba(251,191,36,0.12);
+    border-radius: 20px; padding: 28px; margin-bottom: 20px;
+    box-shadow: 0 0 40px rgba(251,191,36,0.06);
+  }
+  .highlight-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .highlight-day { font-size: 12px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px; }
+  .highlight-kwh { font-size: 48px; font-weight: 300; color: #fbbf24; line-height: 1; }
+  .highlight-kwh span { font-size: 18px; color: #94a3b8; margin-left: 4px; }
+  .highlight-meta { margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+  .badge {
+    padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 500;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .badge-green { background: rgba(52,211,153,0.15); color: #34d399; }
+  .badge-amber { background: rgba(251,191,36,0.15); color: #fbbf24; }
+  .badge-orange { background: rgba(249,115,22,0.15); color: #fb923c; }
+  .badge-red { background: rgba(248,113,113,0.15); color: #f87171; }
+  .meta-text { color: #64748b; font-size: 12px; }
+
+  /* Tip */
+  .tip {
+    margin-top: 16px; padding: 12px 16px;
+    background: rgba(0,0,0,0.2); border-radius: 12px;
+    font-size: 13px; color: #94a3b8; line-height: 1.5;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .tip svg { flex-shrink: 0; margin-top: 2px; }
+
+  /* Hourly Chart */
+  .hourly-section { margin-bottom: 20px; }
+  .hourly-chart {
+    display: flex; align-items: flex-end; gap: 3px; height: 80px;
+    padding: 0 4px; margin-top: 8px;
+  }
+  .hourly-bar-wrap {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  }
+  .hourly-bar {
+    width: 100%; min-width: 4px; border-radius: 3px 3px 0 0;
+    background: linear-gradient(180deg, #fbbf24, rgba(251,191,36,0.2));
+    transition: height 1s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .hourly-label { font-size: 9px; color: #475569; }
+  .hourly-peak { font-size: 10px; color: #fbbf24; font-weight: 500; }
+
+  /* Stats Grid */
+  .stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+  .stat-card {
+    backdrop-filter: blur(12px);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 16px; padding: 20px; text-align: center;
+  }
+  .stat-card svg { margin: 0 auto 8px; display: block; }
+  .stat-value { font-size: 22px; font-weight: 300; }
+  .stat-label { font-size: 11px; color: #64748b; margin-top: 2px; }
+
+  /* Day Cards */
+  .section-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 2px;
+    color: #64748b; margin-bottom: 12px; font-weight: 500;
+  }
+  .day-list { display: flex; flex-direction: column; gap: 6px; }
+  .day-card {
+    display: grid; grid-template-columns: 80px 32px 1fr 60px;
+    align-items: center; gap: 12px;
+    padding: 14px 16px; border-radius: 14px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer; transition: all 0.3s ease;
+  }
+  .day-card:hover { transform: translateY(-2px); background: rgba(255,255,255,0.04); }
+  .day-card.active {
+    background: rgba(251,191,36,0.08) !important;
+    border-color: rgba(251,191,36,0.3) !important;
+  }
+  .day-name { font-size: 13px; font-weight: 500; }
+  .day-temp { font-size: 11px; color: #64748b; }
+  .bar-bg {
+    position: relative; height: 6px;
+    background: rgba(255,255,255,0.04); border-radius: 3px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 3px; width: 0%;
+    transition: width 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .day-kwh { text-align: right; font-size: 14px; font-weight: 500; }
+  .day-kwh span { font-size: 11px; color: #64748b; margin-left: 2px; }
+
+  /* Info */
+  .info-btn {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; padding: 12px 16px; color: #64748b;
+    font-size: 12px; cursor: pointer; transition: all 0.2s;
+    font-family: 'DM Sans', sans-serif; margin-top: 20px;
+  }
+  .info-btn:hover { background: rgba(255,255,255,0.04); }
+  .info-btn svg:last-child { margin-left: auto; }
+  .info-panel {
+    margin-top: 8px; padding: 16px;
+    background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 12px; font-size: 12px; color: #64748b; line-height: 1.7;
+    display: none;
+  }
+  .info-panel.open { display: block; }
+  .info-panel strong { color: #94a3b8; }
+
+  .footer {
+    text-align: center; font-size: 11px; color: #334155;
+    margin-top: 32px; padding-top: 16px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  @media (max-width: 500px) {
+    h1 { font-size: 26px; }
+    .highlight-kwh { font-size: 38px; }
+    .stats { grid-template-columns: 1fr; }
+    .day-card { grid-template-columns: 65px 28px 1fr 50px; gap: 8px; padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container" id="app">
+  <div class="loading">
+    <div class="spinner"></div>
+    <div class="loading-text sans">Lade Wetterdaten von Open-Meteo...</div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// KONFIGURATION
+// ============================================================
+const CONFIG = {
+  // Standardkoordinaten: Thüringen, Schernberg
+  lat: 51.3247,
+  lon: 10.7722,
+  locationName: "Schernberg",
+  defaultSystemSize: 12, // kWp
+  systemEfficiency: 0.85,
+  avgDailyConsumption: 10, // kWh Durchschnittlicher Tagesverbrauch
+};
+
+// ============================================================
+// OPEN-METEO API
+// ============================================================
+async function fetchWeatherData() {
+  // Wetter-API: Temperatur, Bewölkung, Niederschlag, Weathercode
+  // + Solarstrahlung (GHI = shortwave_radiation) als stündliche Daten
+  const url = `https://api.open-meteo.com/v1/forecast`
+    + `?latitude=${CONFIG.lat}&longitude=${CONFIG.lon}`
+    + `&hourly=temperature_2m,weathercode,cloudcover,shortwave_radiation,direct_radiation,diffuse_radiation`
+    + `&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,sunshine_duration,shortwave_radiation_sum,sunrise,sunset`
+    + `&current=temperature_2m,weathercode,cloudcover,is_day`
+    + `&timezone=Europe%2FBerlin`
+    + `&forecast_days=7`;
+
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`API Fehler: ${response.status}`);
+  return await response.json();
+}
+
+// ============================================================
+// WETTER-INTERPRETATION
+// ============================================================
+// WMO Weather Codes → lesbare Beschreibung
+const WMO_DESCRIPTIONS = {
+  0: "Klar", 1: "Überwiegend klar", 2: "Teilweise bewölkt", 3: "Bedeckt",
+  45: "Nebel", 48: "Nebel (Reif)", 51: "Leichter Nieselregen", 53: "Nieselregen",
+  55: "Starker Nieselregen", 56: "Gefrierender Nieselregen", 57: "Starker gefr. Nieselregen",
+  61: "Leichter Regen", 63: "Mäßiger Regen", 65: "Starker Regen",
+  66: "Gefrierender Regen", 67: "Starker gefr. Regen",
+  71: "Leichter Schneefall", 73: "Mäßiger Schneefall", 75: "Starker Schneefall",
+  77: "Schneegriesel", 80: "Leichter Regenschauer", 81: "Regenschauer",
+  82: "Starker Regenschauer", 85: "Leichter Schneeschauer", 86: "Starker Schneeschauer",
+  95: "Gewitter", 96: "Gewitter mit Hagel", 99: "Starkes Gewitter mit Hagel",
+};
+
+function wmoToCondition(code) {
+  if (code <= 1) return "sunny";
+  if (code <= 2) return "partly-cloudy";
+  if (code <= 3) return "cloudy";
+  if (code <= 48) return "overcast"; // Nebel
+  if (code <= 57) return "rain";
+  if (code <= 67) return "rain";
+  if (code <= 77) return "snow";
+  if (code <= 82) return "rain";
+  if (code <= 86) return "snow";
+  return "rain"; // Gewitter
+}
+
+// ============================================================
+// SOLAR-BERECHNUNG (jetzt mit echten GHI-Daten!)
+// ============================================================
+function calculateDailySolar(hourlyRadiation, systemKWp) {
+  // GHI (Global Horizontal Irradiance) in W/m² pro Stunde
+  // Integration über den Tag → Wh/m², dann umrechnen
+  // Vereinfachte Formel: Summe(GHI) / 1000 = Peak Sun Hours (PSH)
+  const totalWh = hourlyRadiation.reduce((sum, val) => sum + (val || 0), 0);
+  const peakSunHours = totalWh / 1000; // kWh/m²
+  const dailyKWh = peakSunHours * systemKWp * CONFIG.systemEfficiency;
+
+  return {
+    peakHours: Math.round(peakSunHours * 10) / 10,
+    dailyKWh: Math.round(dailyKWh * 10) / 10,
+    hourlyW: hourlyRadiation,
+  };
+}
+
+// ============================================================
+// SVG ICONS
+// ============================================================
+const ICONS = {
+  sun: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>`,
+  cloud: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="1.5" stroke-linecap="round"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>`,
+  cloudRain: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="#60a5fa" stroke-width="1.5" stroke-linecap="round"><line x1="16" y1="13" x2="16" y2="21"/><line x1="8" y1="13" x2="8" y2="21"/><line x1="12" y1="15" x2="12" y2="23"/><path d="M20 16.58A5 5 0 0 0 18 7h-1.26A8 8 0 1 0 4 15.25"/></svg>`,
+  cloudSnow: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="#93c5fd" stroke-width="1.5" stroke-linecap="round"><path d="M20 17.58A5 5 0 0 0 18 8h-1.26A8 8 0 1 0 4 16.25"/><line x1="8" y1="16" x2="8.01" y2="16"/><line x1="8" y1="20" x2="8.01" y2="20"/><line x1="12" y1="18" x2="12.01" y2="18"/><line x1="12" y1="22" x2="12.01" y2="22"/><line x1="16" y1="16" x2="16.01" y2="16"/><line x1="16" y1="20" x2="16.01" y2="20"/></svg>`,
+  zap: `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fbbf24" stroke-width="1.5" stroke-linecap="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`,
+  battery: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="6" width="18" height="12" rx="2" ry="2"/><line x1="23" y1="13" x2="23" y2="11"/></svg>`,
+  trendUp: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="1.5" stroke-linecap="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>`,
+  trendDown: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="1.5" stroke-linecap="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/></svg>`,
+  minus: `<svg width="SIZE" height="SIZE" viewBox="0 0 24 24" fill="none" stroke="COLOR" stroke-width="1.5" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>`,
+  info: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>`,
+  chevDown: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>`,
+  chevUp: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><polyline points="18 15 12 9 6 15"/></svg>`,
+  clock: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#818cf8" stroke-width="1.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`,
+};
+
+function icon(name, size, color) {
+  let svg = ICONS[name] || "";
+  svg = svg.replace(/SIZE/g, size || 24);
+  if (color) svg = svg.replace(/COLOR/g, color);
+  return svg;
+}
+
+function weatherIcon(condition, size) {
+  size = size || 32;
+  switch (condition) {
+    case "sunny": return icon("sun", size);
+    case "partly-cloudy": return icon("cloud", size, "#fde68a");
+    case "rain": return icon("cloudRain", size);
+    case "snow": return icon("cloudSnow", size);
+    case "overcast": return icon("cloud", size, "#9ca3af");
+    default: return icon("cloud", size, "#cbd5e1");
+  }
+}
+
+// ============================================================
+// BEWERTUNG & TIPPS
+// ============================================================
+function solarRating(peakH) {
+  if (peakH >= 4)   return { label: "Sehr gut", badge: "badge-green",  icon: icon("trendUp", 13, "#34d399") };
+  if (peakH >= 2)   return { label: "Mäßig",   badge: "badge-amber",  icon: icon("minus", 13, "#fbbf24") };
+  if (peakH >= 0.8) return { label: "Gering",  badge: "badge-orange", icon: icon("trendDown", 13, "#fb923c") };
+  return              { label: "Minimal", badge: "badge-red",    icon: icon("trendDown", 13, "#f87171") };
+}
+
+function barColor(peakH) {
+  if (peakH >= 4)   return "#34d399";
+  if (peakH >= 2)   return "#fbbf24";
+  if (peakH >= 0.8) return "#fb923c";
+  return "#f87171";
+}
+
+function energyTip(dailyKWh, condition) {
+  if (dailyKWh > 30) return "Hervorragender Solartag! Perfekt für Waschmaschine, Trockner und andere Großverbraucher.";
+  if (dailyKWh > 15) return "Guter Ertrag — ideal für moderaten Eigenverbrauch. Batterie wird geladen.";
+  if (dailyKWh > 5)  return "Geringer Ertrag — Großverbraucher besser auf sonnigere Tage verschieben.";
+  return "Sehr wenig Ertrag erwartet. Netzstrom wird überwiegend benötigt.";
+}
+
+// ============================================================
+// DEUTSCHE WOCHENTAGE
+// ============================================================
+const WOCHENTAGE = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+
+// ============================================================
+// APP STATE
+// ============================================================
+let state = {
+  selectedDay: 0,
+  systemSize: CONFIG.defaultSystemSize,
+  showInfo: false,
+  data: null,
+  error: null,
+};
+
+// ============================================================
+// DATEN VERARBEITEN
+// ============================================================
+function processData(raw) {
+  const days = [];
+
+  for (let i = 0; i < raw.daily.time.length && i < 7; i++) {
+    const dateStr = raw.daily.time[i];
+    const date = new Date(dateStr + "T12:00:00");
+    const dayName = WOCHENTAGE[date.getDay()];
+
+    // Stündliche Solarstrahlung für diesen Tag (Index i*24 bis (i+1)*24)
+    const hourlyStart = i * 24;
+    const hourlyEnd = hourlyStart + 24;
+    const hourlyGHI = raw.hourly.shortwave_radiation.slice(hourlyStart, hourlyEnd);
+
+    // Sonnenscheindauer in Stunden (API gibt Sekunden)
+    const sunshineSec = raw.daily.sunshine_duration ? raw.daily.sunshine_duration[i] : 0;
+    const sunshineH = Math.round((sunshineSec / 3600) * 10) / 10;
+
+    days.push({
+      date: dateStr,
+      dayName,
+      high: raw.daily.temperature_2m_max[i],
+      low: raw.daily.temperature_2m_min[i],
+      weatherCode: raw.daily.weathercode[i],
+      condition: wmoToCondition(raw.daily.weathercode[i]),
+      description: WMO_DESCRIPTIONS[raw.daily.weathercode[i]] || "Unbekannt",
+      precipProb: raw.daily.precipitation_probability_max ? raw.daily.precipitation_probability_max[i] : 0,
+      precipSum: raw.daily.precipitation_sum[i],
+      sunshineH,
+      radiationSum: raw.daily.shortwave_radiation_sum ? raw.daily.shortwave_radiation_sum[i] : 0,
+      sunrise: raw.daily.sunrise[i],
+      sunset: raw.daily.sunset[i],
+      hourlyGHI,
+    });
+  }
+
+  return {
+    current: {
+      temp: raw.current.temperature_2m,
+      weatherCode: raw.current.weathercode,
+      condition: wmoToCondition(raw.current.weathercode),
+      description: WMO_DESCRIPTIONS[raw.current.weathercode] || "",
+      cloudCover: raw.current.cloudcover,
+      isDay: raw.current.is_day,
+    },
+    days,
+  };
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  if (state.error) {
+    document.getElementById("app").innerHTML = `
+      <div class="error-box sans">
+        <h2>Keine Verbindung</h2>
+        <p>${state.error}</p>
+        <button class="retry-btn" onclick="loadData()">Erneut versuchen</button>
+      </div>`;
+    return;
+  }
+
+  if (!state.data) return; // Noch am Laden
+
+  const { current, days } = state.data;
+
+  // Solar für alle Tage berechnen
+  const computed = days.map(d => {
+    const solar = calculateDailySolar(d.hourlyGHI, state.systemSize);
+    return { ...d, ...solar };
+  });
+
+  const sel = computed[state.selectedDay];
+  const rating = solarRating(sel.peakHours);
+  const weeklyTotal = computed.reduce((s, d) => s + d.dailyKWh, 0).toFixed(1);
+  const bestDay = computed.reduce((b, d) => d.dailyKWh > b.dailyKWh ? d : b, computed[0]);
+  const maxKWh = Math.max(...computed.map(d => d.dailyKWh), 1);
+  const selfSuff = Math.min(100, Math.round((sel.dailyKWh / CONFIG.avgDailyConsumption) * 100));
+
+  const today = new Date();
+  const dateStr = today.toLocaleDateString("de-DE", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const selDateStr = new Date(sel.date + "T12:00:00").toLocaleDateString("de-DE", { day: "numeric", month: "short" });
+
+  // Sonnenstunden-Text
+  const sunriseTime = sel.sunrise ? new Date(sel.sunrise).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "";
+  const sunsetTime = sel.sunset ? new Date(sel.sunset).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" }) : "";
+
+  // Stündliches Diagramm — nur Tageslicht (6-20 Uhr)
+  const hourlySlice = sel.hourlyGHI.slice(6, 21); // 6:00 - 20:00
+  const maxGHI = Math.max(...hourlySlice, 1);
+
+  document.getElementById("app").innerHTML = `
+    <!-- Header -->
+    <div class="fade-in sans" data-delay="0" style="margin-bottom:32px">
+      <div class="label"><span class="live-dot"></span> Solar-Prognose · Live</div>
+      <h1>${CONFIG.locationName}</h1>
+      <p class="sub sans">${dateStr} · Aktuell ${current.temp}°C, ${current.description}
+        · Bewölkung ${current.cloudCover}%</p>
+    </div>
+
+    <!-- System Size -->
+    <div class="fade-in sans size-row" data-delay="100">
+      <span class="size-label">Anlagengröße:</span>
+      ${[5, 10, 12, 15, 20, 30].map(s => `
+        <button class="size-btn ${state.systemSize === s ? 'active' : ''}" onclick="setSize(${s})">${s} kWp</button>
+      `).join("")}
+    </div>
+
+    <!-- Highlight Card -->
+    <div class="fade-in highlight" data-delay="150">
+      <div class="highlight-top">
+        <div>
+          <div class="sans highlight-day">${sel.dayName}, ${selDateStr}</div>
+          <div class="highlight-kwh">${sel.dailyKWh}<span>kWh</span></div>
+          <div class="sans highlight-meta">
+            <span class="badge ${rating.badge}">${rating.icon} ${rating.label}</span>
+            <span class="meta-text">· ${sel.peakHours}h PSH · ${sel.description} · ${sel.high}°C</span>
+          </div>
+        </div>
+        <div>${weatherIcon(sel.condition, 56)}</div>
+      </div>
+      <div class="tip sans">
+        ${ICONS.zap}
+        ${energyTip(sel.dailyKWh, sel.condition)}
+      </div>
+    </div>
+
+    <!-- Hourly Solar Chart -->
+    <div class="fade-in hourly-section" data-delay="180">
+      <div class="section-label sans">Solarstrahlung · Stündlich (W/m²)</div>
+      <div class="hourly-chart">
+        ${hourlySlice.map((val, i) => {
+          const h = Math.max(2, (val / maxGHI) * 70);
+          const hour = i + 6;
+          const showLabel = (hour % 3 === 0);
+          return `
+            <div class="hourly-bar-wrap">
+              ${val > maxGHI * 0.9 ? `<div class="hourly-peak sans">${Math.round(val)}</div>` : ''}
+              <div class="hourly-bar" data-height="${h}" style="height:0px"></div>
+              ${showLabel ? `<div class="hourly-label sans">${hour}h</div>` : `<div class="hourly-label sans"></div>`}
+            </div>`;
+        }).join("")}
+      </div>
+      <div class="sans" style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:#475569">
+        <span>☀ ${sunriseTime} Aufgang</span>
+        <span>${sel.sunshineH}h Sonnenschein</span>
+        <span>Untergang ${sunsetTime} ☾</span>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="fade-in stats" data-delay="200">
+      <div class="stat-card">
+        ${ICONS.battery}
+        <div class="stat-value">${selfSuff}%</div>
+        <div class="stat-label sans">Autarkie</div>
+      </div>
+      <div class="stat-card">
+        ${icon("trendUp", 18, "#fbbf24")}
+        <div class="stat-value">${weeklyTotal}</div>
+        <div class="stat-label sans">kWh / 7 Tage</div>
+      </div>
+      <div class="stat-card">
+        ${ICONS.clock}
+        <div class="stat-value">${bestDay.dayName.slice(0, 2)}</div>
+        <div class="stat-label sans">Bester Tag</div>
+      </div>
+    </div>
+
+    <!-- 7 Day Forecast -->
+    <div class="fade-in" data-delay="300">
+      <div class="section-label sans">7-Tage Prognose</div>
+      <div class="day-list">
+        ${computed.map((d, i) => {
+          const barW = (d.dailyKWh / maxKWh) * 100;
+          const bColor = barColor(d.peakHours);
+          const isToday = i === 0;
+          return `
+          <div class="day-card sans ${state.selectedDay === i ? 'active' : ''}" onclick="selectDay(${i})">
+            <div>
+              <div class="day-name">${isToday ? 'Heute' : d.dayName.slice(0, 2)}</div>
+              <div class="day-temp">${d.high}° / ${d.low}°</div>
+            </div>
+            <div>${weatherIcon(d.condition, 22)}</div>
+            <div class="bar-bg">
+              <div class="bar-fill" data-width="${barW}" style="background:linear-gradient(90deg,${bColor},transparent)"></div>
+            </div>
+            <div class="day-kwh">${d.dailyKWh}<span>kWh</span></div>
+          </div>`;
+        }).join("")}
+      </div>
+    </div>
+
+    <!-- Info -->
+    <div class="fade-in sans" data-delay="400">
+      <button class="info-btn" onclick="toggleInfo()">
+        ${ICONS.info}
+        Datenquellen & Berechnungsgrundlage
+        ${state.showInfo ? ICONS.chevUp : ICONS.chevDown}
+      </button>
+      <div class="info-panel ${state.showInfo ? 'open' : ''}">
+        <strong>Datenquelle:</strong> Alle Wetterdaten stammen live von der
+        <a href="https://open-meteo.com" target="_blank" style="color:#fbbf24">Open-Meteo API</a>
+        (kostenlos, kein API-Key nötig). Die API nutzt Modelle vom Deutschen Wetterdienst (DWD)
+        und anderen nationalen Wetterdiensten.<br><br>
+        <strong>Solarstrahlung:</strong> Die API liefert GHI (Global Horizontal Irradiance) in W/m²
+        pro Stunde. Daraus berechnen wir Peak Sun Hours (PSH = Summe GHI / 1000) und den
+        geschätzten Ertrag: <code style="color:#fbbf24">PSH × kWp × 0.85</code>.<br><br>
+        <strong>Systemwirkungsgrad:</strong> 85% berücksichtigt Wechselrichter-Verluste, Kabelverluste
+        und Temperaturdegradation. Nicht berücksichtigt: Dachneigung, Ausrichtung, Verschattung.<br><br>
+        <strong>Autarkie:</strong> Basiert auf ~${CONFIG.avgDailyConsumption} kWh/Tag Durchschnittsverbrauch
+        (3-Personen-Haushalt). Ohne Batterie ist die tatsächliche Eigenverbrauchsquote niedriger.<br><br>
+        <strong>Aktualisierung:</strong> Die Daten werden bei jedem Öffnen der Seite neu geladen.
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer sans">
+      Solar-Prognose · Open-Meteo API · Geladen: ${today.toLocaleString("de-DE")}
+      · ${CONFIG.lat}°N ${CONFIG.lon}°E
+    </div>
+  `;
+
+  // Animate
+  requestAnimationFrame(() => {
+    document.querySelectorAll(".fade-in").forEach(el => {
+      const delay = parseInt(el.dataset.delay || 0);
+      setTimeout(() => el.classList.add("visible"), delay);
+    });
+    setTimeout(() => {
+      document.querySelectorAll(".bar-fill").forEach(bar => {
+        bar.style.width = bar.dataset.width + "%";
+      });
+      document.querySelectorAll(".hourly-bar").forEach(bar => {
+        bar.style.height = bar.dataset.height + "px";
+      });
+    }, 400);
+  });
+}
+
+// ============================================================
+// EVENT HANDLERS
+// ============================================================
+function setSize(s) { state.systemSize = s; render(); }
+function selectDay(i) { state.selectedDay = i; render(); }
+function toggleInfo() { state.showInfo = !state.showInfo; render(); }
+
+// ============================================================
+// DATEN LADEN & STARTEN
+// ============================================================
+async function loadData() {
+  document.getElementById("app").innerHTML = `
+    <div class="loading">
+      <div class="spinner"></div>
+      <div class="loading-text sans">Lade Wetterdaten von Open-Meteo...</div>
+    </div>`;
+
+  try {
+    const raw = await fetchWeatherData();
+    state.data = processData(raw);
+    state.error = null;
+    render();
+  } catch (err) {
+    state.error = `Wetterdaten konnten nicht geladen werden. Bitte prüfe deine Internetverbindung.<br><br>
+      <span style="font-size:11px;color:#475569">Technisch: ${err.message}</span>`;
+    render();
+  }
+}
+
+// Los!
+loadData();
+</script>
+</body>
+</html>
