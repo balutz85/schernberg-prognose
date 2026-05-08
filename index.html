@@ -227,7 +227,7 @@ const CONFIG = {
   lat: 51.3247,
   lon: 10.7722,
   locationName: "Schernberg",
-  defaultSystemSize: 12, // kWp
+  defaultSystemSize: 8, // kWp
   systemEfficiency: 0.85,
   avgDailyConsumption: 10, // kWh Durchschnittlicher Tagesverbrauch
 };
@@ -482,7 +482,7 @@ function render() {
     <!-- System Size -->
     <div class="fade-in sans size-row" data-delay="100">
       <span class="size-label">Anlagengröße:</span>
-      ${[5, 10, 12, 15, 20, 30].map(s => `
+      ${[5, 8, 10, 12, 15, 20, 30].map(s => `
         <button class="size-btn ${state.systemSize === s ? 'active' : ''}" onclick="setSize(${s})">${s} kWp</button>
       `).join("")}
     </div>
